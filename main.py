@@ -1,21 +1,115 @@
-import fitz  # PyMuPDF
+import fitz
+from pathlib import Path
+import re
 
-def apagar_area_em_todas_paginas(arquivo_entrada, arquivo_saida):
+INPUT_PDF = "relatorio-geral-pdf.pdf"
+TERMO_NOME = "Nome:"
+TERMO_TOTAL = "Total:"
+TERMO_MANUALMENTE = "manualmente"
+OUTPUT_FOLDER = Path("pdfs_processados")
+
+OUTPUT_FOLDER.mkdir(exist_ok=True)
+
+def sanitize_filenamme(name: str) -> str:
+    """Remove caracteres inválidos para nomes de arquivos."""
+    # Mantém apenas letras, números, espaços, hífens e underlines
+    return re.sub(r'[^\w\s-]', '', name).strip()
+
+def get_employee_name(page: fitz.Page) -> str:
+    """Busca o nome do funcionário na segunda ocorrência de 'Nome:'."""
+    rects = page.search_for(TERMO_NOME)
+
+    if len(rects) < 2:
+        return "Nome_Nao_Encontrado"
     
-    doc = fitz.open(arquivo_entrada)
+    target_rect = rects[1]
 
-    for pagina in doc:
-        area = pagina.search_for("Total:")[0].y1
-        pagina.add_redact_annot(fitz.Rect((390, 240, 580, area + 10)))
-        pagina.add_redact_annot(fitz.Rect((0, area + 10, 600, area + 110)))
-        if pagina.search_for("manualmente") != []:
-            area2 = pagina.search_for("manualmente")[0].y0
-            pagina.add_redact_annot(fitz.Rect((0, area2 - 5, 600, area2 + 55)))
-        
-        pagina.apply_redactions(images=0, graphics=0)
-        
-    doc.save(arquivo_saida, garbage=4, deflate=True)
-    doc.close()
-    print(f"Documento '{arquivo_entrada}' processado com sucesso!")
+    read_rect = fitz.Rect(
+        target_rect.x1 + 5 ,
+        target_rect.y0 - 2,
+        target_rect.x1 + 120,
+        target_rect.y1 + 2
+    )
+    # rect_leitura = fitz.Rect(names[1].x1 + 5, names[1].y0 + 1, names[1].x1 + 120, names[1].y1 + 1)
+    raw_name = page.get_text("text", clip=read_rect).strip()
+    clean_name = sanitize_filenamme(raw_name)
+    return clean_name if clean_name else "Funcionario_sem_Nome"
 
-apagar_area_em_todas_paginas("relatorio-geral-pdf.pdf", "folha_editada.pdf")
+def apply_redactions(page: fitz.Page, y_ref: float):
+    """Aplica todas as tarjas de redação baseadas na coordenada Y de referência."""
+
+    areas_to_redact = [
+        fitz.Rect(432, 240, 580, y_ref + 10),
+        # Lateral Direita Inferior (Metade)
+        fitz.Rect(350, y_ref + 10, 600, y_ref + 110),
+        # Área Central Inferior
+        fitz.Rect(0, y_ref + 21, 600, y_ref + 110)
+    ]
+
+    for rect in areas_to_redact:
+        page.add_redact_annot(rect)
+    
+    manual_occurrences = page.search_for(TERMO_MANUALMENTE)
+    if manual_occurrences:
+        y_manual = manual_occurrences[0].y0
+        footer_rect = fitz.Rect(0, y_manual - 5, 600, y_manual + 55)
+        page.add_redact_annot(footer_rect)
+    
+    page.apply_redactions(images=0, graphics=0)
+
+def save_single_page(doc_origin: fitz.Document, page_idx: int, file_name: str):
+    """Cria e salva um novo PDF contendo apenas a página especificada."""
+    try:
+        # Garante nome único caso já exista arquivo
+        final_path = OUTPUT_FOLDER / f"{file_name}.pdf"
+        counter = 2
+        while final_path.exists():
+            final_path = OUTPUT_FOLDER / f"{file_name}_v{counter}.pdf"
+            counter += 1
+
+        with fitz.open() as new_doc:
+            new_doc.insert_pdf(doc_origin, from_page=page_idx, to_page=page_idx)
+            new_doc.save(final_path)
+            
+        print(f"Salvo: {final_path.name}")
+        
+    except Exception as e:
+        print(f"Erro ao salvar {file_name}: {e}")
+
+def main():
+    if not Path(INPUT_PDF).exists():
+        print(f"Erro: Arquivo '{INPUT_PDF}' não encontrado.")
+        return
+
+    try:
+        # 'with' garante que o arquivo original seja fechado ao final
+        with fitz.open(INPUT_PDF) as doc:
+            
+            for index, page in enumerate(doc):
+                print(f"Processando página {index + 1}...")
+
+                # 1. Encontra a âncora principal (Total)
+                search_total = page.search_for(TERMO_TOTAL)
+                
+                if not search_total:
+                    print(f" -> Aviso: '{TERMO_TOTAL}' não encontrado na página {index + 1}. Pulando redação por coordenada.")
+                    continue # Ou definir uma lógica alternativa
+                
+                # Pega a coordenada base (y1 = fundo do texto "Total")
+                y_anchor = search_total[0].y1
+
+                # 2. Aplica as redações
+                apply_redactions(page, y_anchor)
+
+                # 3. Identifica o nome
+                employee_name = get_employee_name(page)
+
+                # 4. Salva o novo arquivo
+                save_single_page(doc, index, employee_name)
+                break
+
+    except Exception as e:
+        print(f"Ocorreu um erro fatal: {e}")
+
+if __name__ == "__main__":
+    main()

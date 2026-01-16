@@ -206,5 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 logica.txt
-guia_coordenadas.pdf
 relatorio-geral-pdf.pdf
+grade.py
+guia_coordenadas.pdf

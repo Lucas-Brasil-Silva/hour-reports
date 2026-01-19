@@ -1,0 +1,209 @@
+import flet as ft
+import time
+import os
+import asyncio
+import tkinter as tk
+from tkinter import filedialog
+
+# --- SUAS FUNÇÕES PANDAS AQUI ---
+# Cole aqui (ou importe) as funções que criamos anteriormente.
+# Elas devem aceitar o caminho do arquivo como argumento.
+
+try:
+    import treating_pdf
+    import treaty_report
+except ImportError as e:
+    print(f"Aviso: Scripts de processamento não encontrados. Erro: {e}")
+    print("Usando modo simulação.")
+
+def processar_relatorio_horas(caminho_arquivo):
+    """Simula o processamento do relatório de horas."""
+
+    if "treaty_report" in globals():
+        treaty_report.main(caminho_arquivo)
+        return "Relatório de Horas gerado com sucesso!"
+    
+    else:
+        time.sleep(1)
+        return "Simulação: Relatório processado (Arquivo não encontrado)"
+
+def processar_folha_pagamento(caminho_arquivo):
+    """Simula uma segunda funcionalidade diferente."""
+
+    if 'treating_pdf' in globals():
+        treating_pdf.main(caminho_arquivo)
+        return "Folha de Pagamento processada!"
+    else:
+        time.sleep(1)
+        return "Simulação: Folha processada (Arquivo não encontrado)"
+
+# --- CLASSE DA INTERFACE ---
+
+class AutomacaoApp:
+    def __init__(self, page: ft.Page):
+        self.page = page
+        self.page.title = "Painel de Automação"
+        self.page.window_width = 400
+        self.page.window_height = 500
+        self.page.window_resizable = False
+        self.page.theme_mode = ft.ThemeMode.DARK
+        self.page.vertical_alignment = ft.MainAxisAlignment.CENTER
+        self.page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+
+        # Variável para saber qual botão foi clicado (estado)
+        self.acao_atual = None 
+
+        # Componentes da Interface
+        self.criar_interface()
+
+    def criar_interface(self):
+        # Título Moderno
+        titulo = ft.Text(
+            "Painel de Automação", 
+            size=24, 
+            weight=ft.FontWeight.BOLD,
+            color=ft.Colors.WHITE
+        )
+        
+        subtitulo = ft.Text(
+            "Selecione a operação desejada", 
+            size=12, 
+            color=ft.Colors.GREY_400
+        )
+
+        # Botão 1: Relatório de Horas
+        self.btn_horas = self.criar_botao_moderno(
+            texto="Tratar Folha de Horas",
+            icone=ft.Icons.ACCESS_TIME_FILLED,
+            cor=ft.Colors.INDIGO,
+            acao="horas"
+        )
+
+        # Botão 2: Outra Funcionalidade
+        self.btn_folha = self.criar_botao_moderno(
+            texto="Processar Folha Ponto",
+            icone=ft.Icons.ATTACH_MONEY,
+            cor=ft.Colors.TEAL,
+            acao="folha"
+        )
+
+        # Barra de Progresso (Indeterminada) - Inicialmente invisível
+        self.progress_ring = ft.ProgressRing(visible=False, color=ft.Colors.BLUE_400)
+        self.status_text = ft.Text("", color=ft.Colors.GREY_400, size=12)
+
+        # Container Principal (Cartão)
+        card = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(ft.Icons.AUTO_MODE, size=40, color=ft.Colors.BLUE_200),
+                    titulo,
+                    subtitulo,
+                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                    self.btn_horas,
+                    ft.Divider(height=5, color=ft.Colors.TRANSPARENT),
+                    self.btn_folha,
+                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                    self.progress_ring,
+                    self.status_text
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=30,
+            bgcolor=ft.Colors.GREY_900,
+            border_radius=20,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.with_opacity(0.5, ft.Colors.BLACK),
+            )
+        )
+
+        self.page.add(card)
+
+    def criar_botao_moderno(self, texto, icone, cor, acao):
+        return ft.Button( # Usa o botão genérico
+            style=ft.ButtonStyle(
+                bgcolor=cor,
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=20,
+            ),
+            # Monta o conteúdo manualmente (Ícone + Texto)
+            content=ft.Row(
+                [
+                    ft.Icon(icone, color=ft.Colors.WHITE),
+                    ft.Text(texto, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD)
+                ],
+                alignment=ft.MainAxisAlignment.CENTER
+            ),
+            width=280,
+            data=acao,
+            on_click=self.preparar_selecao
+        )
+
+    def preparar_selecao(self, e):
+        """Define qual ação será executada e abre o seletor."""
+        self.acao_atual = e.control.data
+        
+        # Abrir diálogo de seleção de arquivo usando tkinter
+        root = tk.Tk()
+        root.withdraw()  # Esconde a janela principal
+        root.attributes('-topmost', True)  # Coloca a janela na frente
+        
+        caminho_arquivo = filedialog.askopenfilename(
+            title="Selecione um arquivo",
+            filetypes=[
+                ("All files", "*.*")
+            ]
+        )
+        
+        root.destroy()
+        
+        if caminho_arquivo:
+            # Executa o processamento em thread separada
+            self.page.run_task(self.apos_selecionar_arquivo_interno, caminho_arquivo)
+    
+    async def apos_selecionar_arquivo_interno(self, caminho_arquivo):
+        """Processa o arquivo selecionado."""
+        # --- INÍCIO DO PROCESSAMENTO ---
+        self.alternar_loading(True, "Processando arquivo... Aguarde.")
+        
+        try:
+            mensagem = ""
+            # Verifica qual botão foi clicado anteriormente
+            if self.acao_atual == "horas":
+                mensagem = await asyncio.to_thread(processar_relatorio_horas, caminho_arquivo)
+            elif self.acao_atual == "folha":
+                mensagem = await asyncio.to_thread(processar_folha_pagamento, caminho_arquivo)
+            
+            # Feedback de Sucesso
+            self.mostrar_snackbar(mensagem, ft.Colors.GREEN)
+
+        except Exception as erro:
+            # Feedback de Erro
+            self.mostrar_snackbar(f"Erro: {str(erro)}", ft.Colors.RED)
+        
+        finally:
+            # --- FIM DO PROCESSAMENTO ---
+            self.alternar_loading(False)
+            self.acao_atual = None
+
+    def alternar_loading(self, esta_carregando, text=""):
+        """Controla a visibilidade do loader e desativa botões."""
+        self.progress_ring.visible = esta_carregando
+        self.status_text.value = text
+        self.btn_horas.disabled = esta_carregando
+        self.btn_folha.disabled = esta_carregando
+        self.page.update()
+
+    def mostrar_snackbar(self, text, cor):
+        """Exibe mensagem no rodapé."""
+        snack = ft.SnackBar(ft.Text(text), bgcolor=cor)
+        self.page.overlay.append(snack)
+        snack.open = True
+        self.page.update()
+
+def main(page: ft.Page):
+    app = AutomacaoApp(page)
+
+if __name__ == "__main__":
+    ft.run(main, view=ft.AppView.FLET_APP)

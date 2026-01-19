@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List
 
 # --- CONFIGURAÇÕES E CONSTANTES ---
-ARQUIVO_ENTRADA = Path("RelatorioHorasExtras.xls")
+# ARQUIVO_ENTRADA = Path("RelatorioHorasExtras.xls")
 ARQUIVO_SAIDA = Path("Relatorio_Tratado.xlsx")
 
 INDICES_COLUNAS = [3, 8, 9, 10, 11, 12, 14]
@@ -104,12 +104,12 @@ def formatar_saida(df: pd.DataFrame) -> pd.DataFrame:
     
     return df[cols_finais]
 
-def main():
+def main(path: str):
     print("--- Iniciando Processamento ---")
     
     # Pipeline de Execução (O fluxo lógico do script)
     try:
-        df_bruto = carregar_dados(ARQUIVO_ENTRADA)
+        df_bruto = carregar_dados(path)
         df_limpo = limpar_cabecalho(df_bruto)
         
         # Etapa de Transformação Matemática

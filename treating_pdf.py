@@ -2,7 +2,7 @@ import fitz
 from pathlib import Path
 import re
 
-INPUT_PDF = "relatorio-geral-pdf.pdf"
+# INPUT_PDF = "relatorio-geral-pdf.pdf"
 TERMO_NOME = "Nome:"
 TERMO_TOTAL = "Total:"
 TERMO_MANUALMENTE = "manualmente"
@@ -76,14 +76,14 @@ def save_single_page(doc_origin: fitz.Document, page_idx: int, file_name: str):
     except Exception as e:
         print(f"Erro ao salvar {file_name}: {e}")
 
-def main():
-    if not Path(INPUT_PDF).exists():
-        print(f"Erro: Arquivo '{INPUT_PDF}' não encontrado.")
+def main(input_pdf: str):
+    if not Path(input_pdf).exists():
+        print(f"Erro: Arquivo '{input_pdf}' não encontrado.")
         return
 
     try:
         # 'with' garante que o arquivo original seja fechado ao final
-        with fitz.open(INPUT_PDF) as doc:
+        with fitz.open(input_pdf) as doc:
             
             for index, page in enumerate(doc):
                 print(f"Processando página {index + 1}...")

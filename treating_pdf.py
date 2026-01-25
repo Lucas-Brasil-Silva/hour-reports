@@ -8,8 +8,6 @@ TERMO_TOTAL = "Total:"
 TERMO_MANUALMENTE = "manualmente"
 OUTPUT_FOLDER = Path("pdfs_processados")
 
-OUTPUT_FOLDER.mkdir(exist_ok=True)
-
 def sanitize_filenamme(name: str) -> str:
     """Remove caracteres inválidos para nomes de arquivos."""
     # Mantém apenas letras, números, espaços, hífens e underlines
@@ -30,10 +28,9 @@ def get_employee_name(page: fitz.Page) -> str:
         target_rect.x1 + 120,
         target_rect.y1 + 2
     )
-    # rect_leitura = fitz.Rect(names[1].x1 + 5, names[1].y0 + 1, names[1].x1 + 120, names[1].y1 + 1)
     raw_name = page.get_text("text", clip=read_rect).strip()
     clean_name = sanitize_filenamme(raw_name)
-    return clean_name if clean_name else "Funcionario_sem_Nome"
+    return f"{clean_name}-" if clean_name else "Funcionario_sem_Nome"
 
 def apply_redactions(page: fitz.Page, y_ref: float):
     """Aplica todas as tarjas de redação baseadas na coordenada Y de referência."""
@@ -60,6 +57,8 @@ def apply_redactions(page: fitz.Page, y_ref: float):
 def save_single_page(doc_origin: fitz.Document, page_idx: int, file_name: str):
     """Cria e salva um novo PDF contendo apenas a página especificada."""
     try:
+        
+        OUTPUT_FOLDER.mkdir(exist_ok=True)
         # Garante nome único caso já exista arquivo
         final_path = OUTPUT_FOLDER / f"{file_name}.pdf"
         counter = 2

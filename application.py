@@ -1,10 +1,9 @@
 import flet as ft
-import time
 import os
 import asyncio
 import tkinter as tk
 from tkinter import filedialog
-import traceback
+import sys
 
 try:
     import treating_pdf
@@ -12,6 +11,10 @@ try:
 except ImportError as e:
     print(f"Aviso: Scripts de processamento não encontrados. Erro: {e}")
     print("Usando modo simulação.")
+
+if getattr(sys, 'frozen', False):
+    bundle_dir = sys._MEIPASS
+    sys.path.append(bundle_dir)
 
 def processar_relatorio_horas(caminho_arquivo):
     if "treaty_report" not in globals():

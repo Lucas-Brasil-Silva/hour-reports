@@ -2,7 +2,7 @@ import fitz
 from pathlib import Path
 import re
 
-# INPUT_PDF = "relatorio-geral-pdf.pdf"
+# INPUT_PDF = "C:/Users/lucas/Downloads/relatorio-geral-pdf.pdf"
 TERMO_NOME = "Nome:"
 TERMO_TOTAL = "Total:"
 TERMO_MANUALMENTE = "manualmente"
@@ -70,15 +70,12 @@ def save_single_page(doc_origin: fitz.Document, page_idx: int, file_name: str):
         with fitz.open() as new_doc:
             new_doc.insert_pdf(doc_origin, from_page=page_idx, to_page=page_idx)
             new_doc.save(final_path)
-            
-        print(f"Salvo: {final_path.name}")
         
     except Exception as e:
-        print(f"Erro ao salvar {file_name}: {e}")
+        raise Exception(f"Erro ao salvar {file_name}: {str(e)}")
 
 def main(input_pdf: str):
     if not Path(input_pdf).exists():
-        print(f"Erro: Arquivo '{input_pdf}' não encontrado.")
         return
 
     try:
@@ -86,14 +83,12 @@ def main(input_pdf: str):
         with fitz.open(input_pdf) as doc:
             
             for index, page in enumerate(doc):
-                print(f"Processando página {index + 1}...")
 
                 # 1. Encontra a âncora principal (Total)
                 search_total = page.search_for(TERMO_TOTAL)
                 
                 if not search_total:
-                    print(f" -> Aviso: '{TERMO_TOTAL}' não encontrado na página {index + 1}. Pulando redação por coordenada.")
-                    continue # Ou definir uma lógica alternativa
+                    continue
                 
                 # Pega a coordenada base (y1 = fundo do texto "Total")
                 y_anchor = search_total[0].y1
@@ -106,10 +101,9 @@ def main(input_pdf: str):
 
                 # 4. Salva o novo arquivo
                 save_single_page(doc, index, employee_name)
-                break
 
     except Exception as e:
-        print(f"Ocorreu um erro fatal: {e}")
-
+        raise Exception(f"Erro fatal: {str(e)}")
+        
 if __name__ == "__main__":
     main()

@@ -4,10 +4,7 @@ import os
 import asyncio
 import tkinter as tk
 from tkinter import filedialog
-
-# --- SUAS FUNÇÕES PANDAS AQUI ---
-# Cole aqui (ou importe) as funções que criamos anteriormente.
-# Elas devem aceitar o caminho do arquivo como argumento.
+import traceback
 
 try:
     import treating_pdf
@@ -17,25 +14,25 @@ except ImportError as e:
     print("Usando modo simulação.")
 
 def processar_relatorio_horas(caminho_arquivo):
-    """Simula o processamento do relatório de horas."""
-
-    if "treaty_report" in globals():
+    if "treaty_report" not in globals():
+        raise Exception("Módulo 'treaty_report' não foi importado corretamente.")
+    
+    try:
+        # Tenta executar a função principal do seu módulo
         treaty_report.main(caminho_arquivo)
         return "Relatório de Horas gerado com sucesso!"
-    
-    else:
-        time.sleep(1)
-        return "Simulação: Relatório processado (Arquivo não encontrado)"
+    except Exception as e:
+        raise Exception(f"Falha no processamento do Relatório: {str(e)}")
 
-def processar_folha_pagamento(caminho_arquivo):
-    """Simula uma segunda funcionalidade diferente."""
-
-    if 'treating_pdf' in globals():
+def processar_folha_ponto(caminho_arquivo):
+    if 'treating_pdf' not in globals():
+        raise Exception("Módulo 'treating_pdf' não foi importado corretamente.")
+        
+    try:
         treating_pdf.main(caminho_arquivo)
-        return "Folha de Pagamento processada!"
-    else:
-        time.sleep(1)
-        return "Simulação: Folha processada (Arquivo não encontrado)"
+        return "Folha ponto processada!"
+    except Exception as e:
+        raise Exception(f"Falha na edição do PDF: {str(e)}")
 
 # --- CLASSE DA INTERFACE ---
 
@@ -74,7 +71,7 @@ class AutomacaoApp:
         # Botão 1: Relatório de Horas
         self.btn_horas = self.criar_botao_moderno(
             texto="Tratar Folha de Horas",
-            icone=ft.Icons.ACCESS_TIME_FILLED,
+            icone=ft.Icons.TABLE_CHART,
             cor=ft.Colors.INDIGO,
             acao="horas"
         )
@@ -82,7 +79,7 @@ class AutomacaoApp:
         # Botão 2: Outra Funcionalidade
         self.btn_folha = self.criar_botao_moderno(
             texto="Processar Folha Ponto",
-            icone=ft.Icons.ATTACH_MONEY,
+            icone=ft.Icons.PICTURE_AS_PDF,
             cor=ft.Colors.TEAL,
             acao="folha"
         )
@@ -149,12 +146,22 @@ class AutomacaoApp:
         root.withdraw()  # Esconde a janela principal
         root.attributes('-topmost', True)  # Coloca a janela na frente
         
-        caminho_arquivo = filedialog.askopenfilename(
-            title="Selecione um arquivo",
-            filetypes=[
-                ("All files", "*.*")
-            ]
-        )
+        caminho_arquivo = None
+        if self.acao_atual == "folha":
+            caminho_arquivo = filedialog.askopenfilename(
+                title="Selecione um arquivo",
+                filetypes=[
+                    ("PDF", "*.pdf*")
+                ]
+            )
+            
+        else:
+            caminho_arquivo = filedialog.askopenfilename(
+                title="Selecione um arquivo",
+                filetypes=[
+                    ("XLS", "*.xls*")
+                ]
+            )
         
         root.destroy()
         
@@ -173,14 +180,14 @@ class AutomacaoApp:
             if self.acao_atual == "horas":
                 mensagem = await asyncio.to_thread(processar_relatorio_horas, caminho_arquivo)
             elif self.acao_atual == "folha":
-                mensagem = await asyncio.to_thread(processar_folha_pagamento, caminho_arquivo)
+                mensagem = await asyncio.to_thread(processar_folha_ponto, caminho_arquivo)
             
             # Feedback de Sucesso
             self.mostrar_snackbar(mensagem, ft.Colors.GREEN)
 
         except Exception as erro:
             # Feedback de Erro
-            self.mostrar_snackbar(f"Erro: {str(erro)}", ft.Colors.RED)
+            self.mostrar_snackbar(str(erro), ft.Colors.RED)
         
         finally:
             # --- FIM DO PROCESSAMENTO ---

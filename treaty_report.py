@@ -109,7 +109,8 @@ def main(path: str):
     
     # Pipeline de Execução (O fluxo lógico do script)
     try:
-        df_bruto = carregar_dados(path)
+        path_ = Path(path)
+        df_bruto = carregar_dados(path_)
         df_limpo = limpar_cabecalho(df_bruto)
         
         # Etapa de Transformação Matemática
@@ -121,10 +122,9 @@ def main(path: str):
         
         # Exportação
         df_final.to_excel(ARQUIVO_SAIDA, index=False)
-        print(f"✅ Sucesso! Arquivo salvo em: {ARQUIVO_SAIDA.absolute()}")
         
     except Exception as e:
-        print(f"❌ Ocorreu um erro: {e}")
+        raise Exception(f"Ocorreu um erro: {str(e)}")
 
 if __name__ == "__main__":
     main()

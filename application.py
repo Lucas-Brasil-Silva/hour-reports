@@ -159,8 +159,8 @@ class AutomacaoApp:
             )
             
         else:
-            caminho_arquivo = filedialog.askopenfilename(
-                title="Selecione um arquivo",
+            caminho_arquivo = filedialog.askopenfilenames(
+                title="Selecione os arquivos",
                 filetypes=[
                     ("XLS", "*.xls*")
                 ]

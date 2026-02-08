@@ -18,6 +18,13 @@ NOMES_PARA_EXCLUIR = [
     "Lucas Brasil Silva"
 ]
 
+NOMES_PARA_SUBSTITUIR = {
+    "ATESTADO MÉDICO":"ATESTADO",
+    "FALTA NÃO JUSTIFICADA":"FALTA",
+    "Folga NR":"FOLGA",
+    "FALTA JUSTIFICADA":"FOLGA"
+}
+
 def carregar_dados(path: Path, colunas: List[int]) -> pd.DataFrame:
     """Carrega Excel verificando engine baseada na extensão."""
     if not path.exists():
@@ -55,6 +62,7 @@ def higienizar_dataframe(df: pd.DataFrame, tipo_arquivo: str) -> pd.DataFrame:
     else:
         # Para arquivo de ajustes, queremos apenas linhas com Tipo preenchido
         df_limpo = df[df["Tipo"].notna()].copy()
+        df_limpo["Tipo"] = df_limpo["Tipo"].replace(NOMES_PARA_SUBSTITUIR)
 
     return df_limpo.reset_index(drop=True)
 
@@ -102,54 +110,87 @@ def converter_timedelta_para_decimal(series: pd.Series) -> pd.Series:
     Ex: 01:30:00 -> 1.5
     """
     # total_seconds() / 3600 é a forma matemática correta de converter
-    return series.dt.total_seconds().div(3600).round(2)
+    valores_float = series.dt.total_seconds().div(3600).round(2)
 
-def converter_timedelta_para_string(td):
-    """Auxiliar para formatar HH:MM para exibição (se necessário em outra coluna)."""
-    if pd.isnull(td): return ""
-    total_seconds = int(td.total_seconds())
-    horas = total_seconds // 3600
-    minutos = (total_seconds % 3600) // 60
-    return f"{horas:02d}:{minutos:02d}"
+    return valores_float.astype(str).str.replace(".", ",", regex=False)
+
+def preencher_dias_faltantes(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cria linhas para os dias que não existem no arquivo original.
+    Mantém apenas Colaborador e Data preenchidos, o resto fica vazio (NaN/NaT).
+    """
+    # 1. Identifica o intervalo de datas do arquivo (do primeiro ao último dia registrado)
+    # Se quiser forçar o mês inteiro (ex: 01 a 30), pode fixar as datas aqui manualmente.
+    data_min = df["Data"].min()
+    data_max = df["Data"].max()
+    
+    # Gera uma lista com TODOS os dias desse intervalo
+    todas_datas = pd.date_range(start=data_min, end=data_max, freq='D')
+    
+    # 2. Pega a lista de todos os colaboradores únicos
+    colaboradores = df["Colaborador"].unique()
+    
+    # 3. Cria o "Produto Cartesiano" (Todos os Colaboradores x Todas as Datas)
+    # Isso cria um DataFrame vazio com o índice correto
+    idx = pd.MultiIndex.from_product([colaboradores, todas_datas], names=["Colaborador", "Data"])
+    df_completo = pd.DataFrame(index=idx).reset_index()
+    
+    # Garante que a coluna Data esteja no mesmo formato para o merge
+    df_completo["Data"] = df_completo["Data"].dt.date
+    df["Data"] = pd.to_datetime(df["Data"]).dt.date
+    
+    # 4. Faz o Merge: Pega o quadro completo e preenche com as informações que temos
+    # O 'how="left"' garante que todas as datas vazias permaneçam
+    df_final = pd.merge(df_completo, df, on=["Colaborador", "Data"], how="left")
+    
+    return df_final
 
 def unir_e_formatar_final(df_horas: pd.DataFrame, df_ajustes: pd.DataFrame) -> pd.DataFrame:
     """Realiza o merge e formata as colunas finais."""
     
-    # 1. Converter colunas de tempo para Decimal (Float)
-    # ATENÇÃO: Convertemos direto do Timedelta, sem passar por string intermediária
-    df_horas["Trabalhadas"] = converter_timedelta_para_decimal(df_horas["Trabalhadas_td"])
+    # 1. Preparar data base para o merge
+    df_horas["Data"] = pd.to_datetime(df_horas["Data"], dayfirst=True, errors='coerce')
     
-    # Se quiser manter a coluna de Extras formatada visualmente (HH:MM), use a função string
-    # Se quiser decimal, use a função decimal. Mantive a lógica original (HH:MM para Extras)
-    df_horas["Extras 01"] = df_horas["Extras 01_td"].apply(converter_timedelta_para_string)
+    # --- NOVO PASSO: PREENCHER DIAS FALTANTES ---
+    # Aqui criamos as linhas vazias para os dias que o colaborador não bateu ponto
+    df_horas = preencher_dias_faltantes(df_horas)
+    # --------------------------------------------
 
-    # 2. Preparar chaves para o Merge
-    df_horas["Data_Merge"] = pd.to_datetime(df_horas["Data"], dayfirst=True, errors='coerce').dt.date
+    # 2. Converter Timedeltas para Decimal (Apenas para fins de cálculo/visualização se houver dados)
+    # Precisamos tratar erros agora, pois as novas linhas terão valores NaT (nulos)
+    df_horas["Trabalhadas"] = converter_timedelta_para_decimal(df_horas["Trabalhadas_td"].fillna(pd.Timedelta(0)))
+
+    df_horas["Extras 01"] = converter_timedelta_para_decimal(df_horas["Extras 01_td"].fillna(pd.Timedelta(0)))
+
     
-    # 3. Merge (Left Join)
+    # Se a linha foi criada agora (vazia), 'Trabalhadas' vai ficar como "0,00". 
+    # Se você quiser que fique TOTALMENTE vazia visualmente:
+    mask_vazios = df_horas["Trabalhadas_td"].isna()
+    
+    # 3. Merge com Ajustes (Left Join)
+    # Atenção: df_horas agora tem TODOS os dias, então o merge vai casar certinho
     df_merged = pd.merge(
         left=df_horas,
         right=df_ajustes[["Colaborador", "Tipo", "Data"]],
-        left_on=["Colaborador", "Data_Merge"],
-        right_on=["Colaborador", "Data"],
+        on=["Colaborador", "Data"], # Já normalizamos para .date no passo anterior
         how="left",
         suffixes=("", "_ajuste")
     )
     
-    # 4. Preencher "Trabalhadas" com o "Tipo" (Férias/Atestado) quando vazio
-    # Converte para string para aceitar texto "FÉRIAS" junto com números
-    df_merged["Trabalhadas"] = df_merged["Trabalhadas"].fillna("")
-    
-    mask_substituicao = (df_merged["Tipo"].notna()) & (df_merged["Trabalhadas"] == "")
+    # 4. Limpeza visual (Opcional)
+    # Se for uma linha criada artificialmente e não tiver ajuste, deixamos campos em branco
+    if mask_vazios.any():
+         df_merged.loc[mask_vazios, "Trabalhadas"] = ""
+
+    # Lógica anterior de preencher com o Tipo (Férias/Atestado)
+    mask_substituicao = (df_merged["Tipo"].notna()) & ((df_merged["Trabalhadas"] == "") | (df_merged["Trabalhadas"] == "0,00"))
     df_merged.loc[mask_substituicao, "Trabalhadas"] = df_merged.loc[mask_substituicao, "Tipo"]
+
+    df_merged.loc[df_merged["Extras 01"] == "0,0", ["Extras 01"]] = ""
     
-    # 5. Limpeza Final de Colunas
-    colunas_finais = ["Colaborador", "Data_Merge", "Trabalhadas", "Extras 01"] # Adicione outras se necessário
-    # Se quiser manter todas exceto as temporárias:
-    cols_to_keep = [c for c in df_merged.columns if not c.endswith("_td") and c not in ["Data_ajuste", "Data_Merge", "Tipo"]]
-    
-    # Atualiza a coluna Data original com o formato datetime correto
-    df_merged["Data"] = pd.to_datetime(df_merged["Data_Merge"])
+    # 5. Seleção de Colunas Finais
+    # Removemos colunas auxiliares
+    cols_to_keep = [c for c in df_merged.columns if not c.endswith("_td") and c != "Tipo"]
     
     return df_merged[cols_to_keep]
 

@@ -2,11 +2,16 @@ import fitz
 from pathlib import Path
 import re
 
-# INPUT_PDF = "C:/Users/lucas/Downloads/relatorio-geral-pdf.pdf"
 TERMO_NOME = "Nome:"
 TERMO_TOTAL = "Total:"
 TERMO_MANUALMENTE = "manualmente"
 OUTPUT_FOLDER = Path("pdfs_processados")
+
+NOMES_PARA_EXCLUIR = [
+    "Gustavo Andregtoni Puel", 
+    "Thais Carlini", 
+    "Lucas Brasil Silva"
+]
 
 def sanitize_filenamme(name: str) -> str:
     """Remove caracteres inválidos para nomes de arquivos."""
@@ -98,8 +103,9 @@ def main(input_pdf: str):
                 # 3. Identifica o nome
                 employee_name = get_employee_name(page)
 
-                # 4. Salva o novo arquivo
-                save_single_page(doc, index, employee_name)
+                # 4. Verifica se não esta na lista de nomes a excluir e salva o novo arquivo
+                if employee_name not in NOMES_PARA_EXCLUIR:
+                    save_single_page(doc, index, employee_name)
 
     except Exception as e:
         raise Exception(f"Erro fatal: {str(e)}")

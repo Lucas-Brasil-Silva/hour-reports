@@ -1,5 +1,10 @@
-import flet as ft
 import os
+import ssl
+
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ["PYTHONHTTPSVERIFY"] = "0"
+
+import flet as ft
 import asyncio
 import tkinter as tk
 from tkinter import filedialog

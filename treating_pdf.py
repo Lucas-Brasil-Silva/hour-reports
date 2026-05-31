@@ -30,7 +30,7 @@ def get_employee_name(page: fitz.Page) -> str:
     read_rect = fitz.Rect(
         target_rect.x1 + 5 ,
         target_rect.y0 - 2,
-        target_rect.x1 + 120,
+        target_rect.x1 + 170,
         target_rect.y1 + 2
     )
     raw_name = page.get_text("text", clip=read_rect).strip()
@@ -41,7 +41,6 @@ def apply_redactions(page: fitz.Page, y_ref: float):
     """Aplica todas as tarjas de redação baseadas na coordenada Y de referência."""
 
     areas_to_redact = [
-        fitz.Rect(432, 240, 580, y_ref + 10),
         # Lateral Direita Inferior (Metade)
         fitz.Rect(350, y_ref + 10, 600, y_ref + 110),
         # Área Central Inferior
